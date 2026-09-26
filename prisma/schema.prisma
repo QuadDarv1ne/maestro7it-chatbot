@@ -1,0 +1,193 @@
+// Prisma schema for Maestro7IT chatbot
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Категория базы знаний (DevOps, Безопасность, Базы данных, и т.д.)
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  emoji     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items FaqItem[]
+}
+
+/// Элемент базы знаний (вопрос-ответ)
+model FaqItem {
+  id          String   @id @default(cuid())
+  question    String
+  answer      String
+  keywords    String?
+  isPinned    Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tags     FaqTag[]
+  feedback FaqFeedback[]
+
+  @@index([categoryId])
+  @@index([isPinned])
+  @@index([isPublished])
+}
+
+/// Тег для гибкой маркировки ответов
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  items FaqTag[]
+}
+
+/// Связь FAQ-элемента с тегом
+model FaqTag {
+  faqItemId String
+  tagId     String
+  faqItem   FaqItem @relation(fields: [faqItemId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([faqItemId, tagId])
+}
+
+/// Пользователь бота в MAX
+model MaxUser {
+  id          String   @id @default(cuid())
+  maxUserId   String   @unique
+  username    String?
+  firstName   String?
+  lastName    String?
+  isBlocked   Boolean  @default(false)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages   MessageLog[]
+  feedback   FaqFeedback[]
+  broadcasts BroadcastRecipient[]
+}
+
+/// Лог входящего/исходящего сообщения.
+/// direction: 'in' | 'out'.
+/// source: 'faq' | 'llm' | 'command' | 'callback' | 'broadcast' | 'offtopic'.
+/// rating: 1 = useful, -1 = not helpful.
+model MessageLog {
+  id         String   @id @default(cuid())
+  maxUserId  String?
+  user       MaxUser? @relation(fields: [maxUserId], references: [id], onDelete: SetNull)
+  direction  String
+  text       String
+  source     String
+  faqItemId  String?
+  isOffTopic Boolean  @default(false)
+  rating     Int?
+  createdAt  DateTime @default(now())
+
+  @@index([maxUserId])
+  @@index([createdAt])
+  @@index([source])
+  @@index([isOffTopic])
+}
+
+/// Оценка пользователя (Полезно / Не помогло). rating: 1 or -1.
+model FaqFeedback {
+  id        String   @id @default(cuid())
+  faqItemId String
+  faqItem   FaqItem  @relation(fields: [faqItemId], references: [id], onDelete: Cascade)
+  maxUserId String?
+  user      MaxUser? @relation(fields: [maxUserId], references: [id], onDelete: SetNull)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([faqItemId])
+  @@index([maxUserId])
+}
+
+/// Настройки бота (key-value store)
+model BotSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Команды бота (/start, /help, и т.д.)
+model BotCommand {
+  id          String   @id @default(cuid())
+  command     String   @unique
+  description String
+  response    String
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Отложенная/мгновенная рассылка. status: 'pending' | 'sending' | 'done' | 'failed'.
+model Broadcast {
+  id             String    @id @default(cuid())
+  text           String
+  status         String    @default("pending")
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  recipientCount Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  recipients BroadcastRecipient[]
+}
+
+/// Получатель рассылки. status: 'pending' | 'sent' | 'failed'.
+model BroadcastRecipient {
+  id          String    @id @default(cuid())
+  broadcastId String
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  maxUserId   String
+  user        MaxUser   @relation(fields: [maxUserId], references: [id], onDelete: Cascade)
+  status      String    @default("pending")
+  error       String?
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([broadcastId])
+  @@index([maxUserId])
+}
+
+/// Журнал действий администратора
+model AdminActionLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String?
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}
+
+/// Сессии администратора (persistent, переживает рестарт сервера)
+model AdminSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  lastActivity DateTime @default(now())
+
+  @@index([expiresAt])
+}
