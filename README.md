@@ -6,6 +6,8 @@
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite)](https://www.sqlite.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 
+[Русский](README.md) | [English](README_EN.md)
+
 Чат-бот для мессенджера **MAX** школы программирования **Maestro7IT** — информационная поддержка студентов по 23 курсам на платформе Stepik.
 
 Создано по образцу [service-learning-max-chatbot](https://github.com/QuadDarv1ne/service-learning-max-chatbot).
@@ -114,12 +116,12 @@ bun run dev
 ```
 .
 ├── prisma/
-│   └── schema.prisma              # 11 моделей БД
+│   └── schema.prisma              # 13 моделей БД
 ├── scripts/
 │   └── seed.ts                    # 23 курса + 12 общих FAQ + команды + настройки
 ├── src/
 │   ├── app/
-│   │   ├── api/                   # 22 API endpoints
+│   │   ├── api/                   # 27 API route handlers
 │   │   │   ├── health/
 │   │   │   ├── max/webhook/       # Webhook для MAX
 │   │   │   ├── admin/{login,logout,me}/
@@ -129,7 +131,7 @@ bun run dev
 │   │   │   ├── logs/              # list + export CSV + stream SSE
 │   │   │   ├── analytics/
 │   │   │   ├── settings/
-│   │   │   ├── bot/{check, webhook/{subscribe,unsubscribe}}/
+│   │   │   ├── bot/{check,simulate,webhook/{subscribe,unsubscribe}}/
 │   │   │   ├── broadcasts/        # CRUD + async send
 │   │   │   ├── unanswered/        # list + convert to FAQ
 │   │   │   ├── commands/          # CRUD
@@ -156,7 +158,7 @@ bun run dev
 
 ### Модели базы данных
 
-`Category`, `FaqItem`, `Tag`, `FaqTag`, `MaxUser`, `MessageLog`, `FaqFeedback`, `BotSetting`, `BotCommand`, `Broadcast`, `BroadcastRecipient`, `AdminActionLog`
+`Category`, `FaqItem`, `Tag`, `FaqTag`, `MaxUser`, `MessageLog`, `FaqFeedback`, `BotSetting`, `BotCommand`, `Broadcast`, `BroadcastRecipient`, `AdminActionLog`, `AdminSession`
 
 ---
 
@@ -186,8 +188,8 @@ bun run dev
 
 ## 🚢 Деплой
 
-- **VPS** — systemd + Caddy (рекомендуется), требует HTTPS для webhook
-- **Docker** — готовый `Dockerfile`
+- **VPS** — systemd + Caddy (рекомендуется). В репозитории есть готовый `Caddyfile`; приложение собирается в режиме Next.js `output: "standalone"` и запускается через `node .next/standalone/server.js`. Для webhook нужен HTTPS.
+- **Контейнер** — standalone-сборку (`.next/standalone` + `.next/static` + `public`) можно упаковать в любой образ с Node.js 18+/Bun.
 - ⚠️ **Vercel/Netlify не подходят** — SQLite не работает в serverless
 
 **Проверка после деплоя:**

@@ -3,9 +3,14 @@
 
 Copyright (c) 2025-2026 Дуплей Максим Игоревич (QuadDarv1ne) и Школа программирования Maestro7IT
 
-Проект: service-learning-max-chatbot — Чат-бот для мессенджера MAX
-        программы «Обучение служением. Первые»
-Репозиторий: https://github.com/QuadDarv1ne/service-learning-max-chatbot
+Проект: maestro7it-chatbot — Чат-бот для мессенджера MAX школы программирования
+        Maestro7IT. Информационная поддержка студентов по 23 курсам на платформе
+        Stepik, с полноценной админ-панелью.
+Репозиторий: https://github.com/QuadDarv1ne/maestro7it-chatbot
+
+Примечание: данная работа является производной от service-learning-max-chatbot
+            (https://github.com/QuadDarv1ne/service-learning-max-chatbot),
+            созданной тем же правообладателем, и распространяется на тех же условиях.
 
 
 УСЛОВИЯ И ПОЛОЖЕНИЯ
@@ -22,7 +27,7 @@ Copyright (c) 2025-2026 Дуплей Максим Игоревич (QuadDarv1ne)
 1. ТРЕБОВАНИЕ АТРИБУЦИИ (УКАЗАНИЯ АВТОРСТВА)
 --------------------------------------------
 Вышеуказанное уведомление об авторских правах, данное разрешение и ссылка на
-оригинальный репозиторий (https://github.com/QuadDarv1ne/service-learning-max-chatbot)
+оригинальный репозиторий (https://github.com/QuadDarv1ne/maestro7it-chatbot)
 должны быть включены во все копии или существенные части Программного обеспечения.
 
 Любые производные работы или модификации должны содержать явное указание
@@ -36,7 +41,7 @@ Copyright (c) 2025-2026 Дуплей Максим Игоревич (QuadDarv1ne)
 Перед любым использованием Программного обеспечения в любом проекте
 (коммерческом или некоммерческом) пользователь ОБЯЗАН уведомить автора.
 Уведомление следует направить через:
-- GitHub Issues: https://github.com/QuadDarv1ne/service-learning-max-chatbot/issues
+- GitHub Issues: https://github.com/QuadDarv1ne/maestro7it-chatbot/issues
 - Или через другие средства связи, указанные в репозитории проекта
 
 Уведомление должно содержать:
@@ -77,9 +82,11 @@ Copyright (c) 2025-2026 Дуплей Максим Игоревич (QuadDarv1ne)
 ---------------------
 При создании производных работ на основе данного Программного обеспечения
 вы обязаны:
-(a) Чётко указать, что ваша работа является производной от service-learning-max-chatbot
+(a) Чётко указать, что ваша работа является производной от maestro7it-chatbot
+    (самого происходящего от service-learning-max-chatbot)
 (b) Включить имя оригинального автора: Дуплей Максим Игоревич
 (c) Указать ссылку на оригинальный репозиторий
+    (https://github.com/QuadDarv1ne/maestro7it-chatbot)
 (d) Лицензировать вашу производную работу на этих же условиях
 (e) Уведомить оригинального автора о производной работе
 
@@ -124,4 +131,4 @@ Copyright (c) 2025-2026 Дуплей Максим Игоревич (QuadDarv1ne)
 разрешениям, выходящим за рамки данной лицензии, обращайтесь:
 
 - GitHub: https://github.com/QuadDarv1ne
-- Issues репозитория: https://github.com/QuadDarv1ne/service-learning-max-chatbot/issues
+- Issues репозитория: https://github.com/QuadDarv1ne/maestro7it-chatbot/issues
