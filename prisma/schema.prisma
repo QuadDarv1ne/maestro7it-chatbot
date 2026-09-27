@@ -188,6 +188,41 @@ model AdminSession {
   createdAt DateTime @default(now())
   expiresAt DateTime
   lastActivity DateTime @default(now())
+  /// Связь с аккаунтом (опциональная — старые сессии могут быть без неё)
+  accountId String?
+  account   AdminAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
+  @@index([expiresAt])
+  @@index([accountId])
+}
+
+/// Аккаунт администратора (email + пароль)
+model AdminAccount {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         String    @default("admin") // "super_admin" | "admin"
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions     AdminSession[]
+
+  @@index([email])
+}
+
+/// Токены восстановления пароля
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
   @@index([expiresAt])
 }

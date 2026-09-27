@@ -7,6 +7,7 @@ import {
   GraduationCap, LayoutDashboard, BookOpen, FolderTree, Tag,
   ScrollText, BarChart3, Settings, Megaphone, HelpCircle, Terminal,
   History, Search, LogOut, Menu, X, Loader2, ExternalLink, Sparkles,
+  Users,
 } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { ThemeToggle } from './theme-toggle'
@@ -23,6 +24,7 @@ export type TabId =
   | 'unanswered'
   | 'broadcasts'
   | 'commands'
+  | 'accounts'
   | 'simulator'
   | 'settings'
   | 'actions'
@@ -50,6 +52,7 @@ const NAV: NavItem[] = [
   { id: 'actions', label: 'Журнал действий', icon: History, group: 'Операции' },
 
   { id: 'simulator', label: 'Симулятор бота', icon: Sparkles, group: 'Система' },
+  { id: 'accounts', label: 'Администраторы', icon: Users, group: 'Система' },
   { id: 'settings', label: 'Настройки', icon: Settings, group: 'Система' },
 ]
 
@@ -67,6 +70,26 @@ export function AdminShell({ tab, onTabChange, onLogout, children }: AdminShellP
   const [searchResults, setSearchResults] = useState<any>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const [unansweredCount, setUnansweredCount] = useState<number>(0)
+  const [currentAccount, setCurrentAccount] = useState<{ email: string; name: string | null; role: string } | null>(null)
+
+  // Загружаем текущий аккаунт для шапки
+  useEffect(() => {
+    let mounted = true
+    async function loadAccount() {
+      try {
+        const res = await api.me()
+        if (mounted && res.authenticated && res.account) {
+          setCurrentAccount({
+            email: res.account.email,
+            name: res.account.name,
+            role: res.account.role,
+          })
+        }
+      } catch {}
+    }
+    loadAccount()
+    return () => { mounted = false }
+  }, [])
 
   // Загружаем счётчик "без ответа" для бейджа в навигации
   useEffect(() => {
@@ -239,6 +262,18 @@ export function AdminShell({ tab, onTabChange, onLogout, children }: AdminShellP
             </a>
 
             <ThemeToggle />
+
+            {currentAccount && (
+              <div className="hidden md:flex items-center gap-2 px-3 h-8 rounded-md border border-border bg-muted/30 text-xs">
+                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-semibold text-primary">
+                  {(currentAccount.name || currentAccount.email)[0].toUpperCase()}
+                </div>
+                <div className="leading-tight">
+                  <div className="font-medium">{currentAccount.name || currentAccount.email}</div>
+                  <div className="text-[10px] text-muted-foreground">{currentAccount.role}</div>
+                </div>
+              </div>
+            )}
 
             <Button variant="ghost" size="sm" onClick={handleLogout} title="Выйти">
               <LogOut className="h-4 w-4" />

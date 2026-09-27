@@ -39,13 +39,64 @@ async function request<T = any>(
 
 export const api = {
   // auth
-  login: (password: string) =>
+  login: (email: string, password: string, remember?: boolean) =>
     request<{ ok: boolean; error?: string }>('/api/admin/login', {
       method: 'POST',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ email, password, remember }),
     }),
   logout: () => request('/api/admin/logout', { method: 'POST' }),
-  me: () => request<{ authenticated: boolean }>('/api/admin/me'),
+  me: () => request<{ authenticated: boolean; account?: any }>('/api/admin/me'),
+
+  // password reset
+  requestReset: (email: string) =>
+    request<{ ok: boolean; message?: string; emailConfigured?: boolean }>(
+      '/api/admin/reset-request',
+      { method: 'POST', body: JSON.stringify({ email }) },
+    ),
+  verifyResetToken: (token: string) =>
+    request<{ ok: boolean; email?: string; error?: string }>(
+      `/api/admin/reset-confirm?token=${encodeURIComponent(token)}`,
+    ),
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ ok: boolean; error?: string }>('/api/admin/reset-confirm', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
+
+  // change own password (when logged in)
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean; error?: string }>('/api/admin/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  // admin accounts management (super_admin only)
+  listAccounts: () => request<{ ok: boolean; accounts?: any[]; currentAccountId?: string }>('/api/admin/accounts'),
+  createAccount: (data: { email: string; password: string; name?: string; role?: string }) =>
+    request<{ ok: boolean; account?: any; error?: string }>('/api/admin/accounts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAccount: (id: string, data: { role?: string; isActive?: boolean; name?: string }) =>
+    request<{ ok: boolean; account?: any; error?: string }>(`/api/admin/accounts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteAccount: (id: string) =>
+    request<{ ok: boolean; error?: string }>(`/api/admin/accounts/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // knowledge base export/import
+  exportKbUrl: () => '/api/kb/export',
+  importKb: (data: any, mode: 'replace' | 'merge' = 'replace') =>
+    request<{ ok: boolean; imported?: number; skipped?: number; error?: string }>('/api/kb/import', {
+      method: 'POST',
+      body: JSON.stringify({ data, mode }),
+    }),
+
+  // public
+  publicStats: () => request<{ ok: boolean; stats?: any }>('/api/public/stats'),
 
   // categories
   listCategories: () => request('/api/categories'),

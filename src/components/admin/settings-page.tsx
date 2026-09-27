@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Save, CheckCircle2, Plug, PlugZap, Unplug, Bot, AlertCircle } from 'lucide-react'
+import { Loader2, Save, CheckCircle2, Plug, PlugZap, Unplug, Bot, AlertCircle, Lock, Eye, EyeOff, Database, Download, Upload } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
 
@@ -272,6 +272,10 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      <ChangePasswordCard />
+
+      <KbBackupCard />
+
       <div className="flex justify-end gap-2 sticky bottom-4">
         <Button onClick={handleSave} disabled={saving} size="lg" className="shadow-lg">
           {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
@@ -279,5 +283,256 @@ export function SettingsPage() {
         </Button>
       </div>
     </div>
+  )
+}
+
+// --- Change Password Card ---
+
+function ChangePasswordCard() {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrent, setShowCurrent] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError('Заполните все поля')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Новый пароль и подтверждение не совпадают')
+      return
+    }
+    if (newPassword.length < 8) {
+      setError('Новый пароль должен быть не менее 8 символов')
+      return
+    }
+    if (!/[a-zA-Zа-яА-Я]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setError('Пароль должен содержать буквы и цифры')
+      return
+    }
+    if (currentPassword === newPassword) {
+      setError('Новый пароль не должен совпадать с текущим')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const res = await api.changePassword(currentPassword, newPassword)
+      if (res.ok) {
+        toast.success('Пароль изменён', {
+          description: 'Другие сессии этого аккаунта деактивированы',
+        })
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+      } else {
+        setError(res.error || 'Ошибка')
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Lock className="h-4 w-4" /> Смена пароля
+        </CardTitle>
+        <CardDescription>
+          После смены пароля все другие сессии этого аккаунта будут деактивированы
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+          <div className="space-y-2">
+            <Label htmlFor="currentPw">Текущий пароль</Label>
+            <div className="relative">
+              <Input
+                id="currentPw"
+                type={showCurrent ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrent(!showCurrent)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground"
+                tabIndex={-1}
+              >
+                {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="newPw">Новый пароль</Label>
+            <div className="relative">
+              <Input
+                id="newPw"
+                type={showNew ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNew(!showNew)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground"
+                tabIndex={-1}
+              >
+                {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPw">Подтвердите новый пароль</Label>
+            <Input
+              id="confirmPw"
+              type={showNew ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          {error && (
+            <div className="flex items-start gap-2 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          <Button type="submit" disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Изменить пароль
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+// --- Knowledge Base Backup Card ---
+
+function KbBackupCard() {
+  const [importing, setImporting] = useState(false)
+  const [importMode, setImportMode] = useState<'replace' | 'merge'>('merge')
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handleExport() {
+    // Прямая ссылка — браузер скачает файл
+    window.open(api.exportKbUrl(), '_blank')
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      const res = await api.importKb(data, importMode)
+      if (res.ok) {
+        setImportResult({ imported: res.imported || 0, skipped: res.skipped || 0 })
+        toast.success('Импорт завершён', {
+          description: `Импортировано: ${res.imported}, пропущено: ${res.skipped}`,
+        })
+      } else {
+        toast.error('Ошибка импорта', { description: res.error })
+      }
+    } catch (e: any) {
+      toast.error('Ошибка чтения файла', { description: e?.message })
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Database className="h-4 w-4" /> База знаний — экспорт/импорт
+        </CardTitle>
+        <CardDescription>
+          Backup базы знаний в JSON. Полезно для переноса между окружениями.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={handleExport} variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Экспортировать в JSON
+          </Button>
+
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportFile}
+              className="hidden"
+              id="kb-import-file"
+            />
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+              variant="outline"
+            >
+              {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+              Импортировать из JSON
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Label className="text-sm">Режим импорта:</Label>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="import-mode"
+              checked={importMode === 'merge'}
+              onChange={() => setImportMode('merge')}
+            />
+            Merge (добавить новые, пропустить дубликаты)
+          </label>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="import-mode"
+              checked={importMode === 'replace'}
+              onChange={() => setImportMode('replace')}
+            />
+            Replace (полная замена)
+          </label>
+        </div>
+
+        {importResult && (
+          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm">
+            ✅ Импортировано: <strong>{importResult.imported}</strong>, пропущено: <strong>{importResult.skipped}</strong>
+          </div>
+        )}
+
+        <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/50">
+          <div className="font-medium text-foreground mb-1">Формат файла:</div>
+          <code className="text-[11px]">
+            {'{ "version": "1.0", "categories": [...], "faqs": [...], "tags": [...] }'}
+          </code>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

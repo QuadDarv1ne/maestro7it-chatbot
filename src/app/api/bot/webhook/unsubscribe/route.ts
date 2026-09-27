@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       update: { value: 'false' },
       create: { key: 'webhookSubscribed', value: 'false' },
     })
-    await logAdminAction('bot.webhook.unsubscribe', 'BotSetting', null, `URL: ${targetUrl}`)
+    await logAdminAction('bot.webhook.unsubscribe', 'BotSetting', undefined, `URL: ${targetUrl}`)
     return NextResponse.json({ ok: true, result })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 })

@@ -117,10 +117,9 @@ async function sendBroadcast(broadcastId: string) {
               .map((u) => ({
                 broadcastId,
                 maxUserId: u.id,
-                status: 'failed' as const,
+                status: 'failed',
                 error: 'Прервано: ошибка авторизации MAX API',
               })),
-            skipDuplicates: true,
           }).catch(() => {})
           return
         }

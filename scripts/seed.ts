@@ -3,15 +3,16 @@
  * Seed script for Maestro7IT chatbot.
  *
  * Создаёт:
+ *  - Super-admin аккаунт (email + пароль из .env)
  *  - 7 категорий курсов
  *  - 23 курса (как на school-maestro7it.ru / Stepik)
  *  - Теги
- *  - Общие вопросы о школе (контакты, запись, стоимость, формат)
  *  - Команды бота
  *  - Настройки по умолчанию
  */
 
 import { PrismaClient } from '@prisma/client'
+import { hashPassword } from '../src/lib/password'
 
 const db = new PrismaClient()
 
@@ -279,124 +280,26 @@ const COURSES: CourseSeed[] = [
 ]
 
 // --- General school FAQ ---
-interface GeneralFaqSeed {
-  question: string
-  answer: string
-  keywords: string
-  category?: string
-  pinned?: boolean
-}
-
-const GENERAL_FAQ: GeneralFaqSeed[] = [
-  {
-    question: 'Как записаться на пробное занятие?',
-    answer:
-      'Записаться на пробное занятие можно через форму на сайте school-maestro7it.ru (кнопка «Запишитесь на занятие»), либо написав нам в любой мессенджер: MAX, Telegram @quadd4rv1n7, WhatsApp +7 915 048-02-49. Первые 15 минут — тестирование, чтобы определить ваш уровень и подобрать курс.',
-    keywords: 'запись, пробное занятие, тестирование, записаться, курс',
-    category: 'Общее',
-    pinned: true,
-  },
-  {
-    question: 'Где проходят курсы?',
-    answer:
-      'Все 23 курса размещены на платформе Stepik — это крупнейшая образовательная IT-платформа в России. Вы учитесь в удобном темпе, материалы доступны 24/7. Часть курсов также дублируется на YouTube-канале Maestro7IT. Ссылки на конкретный курс можно получить у бота командой /menu или у преподавателя.',
-    keywords: 'stepik, платформа, где учиться, онлайн, формат',
-    category: 'Общее',
-    pinned: true,
-  },
-  {
-    question: 'Сколько стоят курсы?',
-    answer:
-      'Часть курсов на Stepik бесплатная, часть — платная. Уточнить стоимость конкретного курса и действующие скидки можно у администратора в Telegram @quadd4rv1n7 или WhatsApp +7 915 048-02-49. Также доступны индивидуальные занятия и наставничество — их стоимость договорная.',
-    keywords: 'стоимость, цена, скидки, оплата, сколько стоит',
-    category: 'Общее',
-  },
-  {
-    question: 'Какие контакты у школы Maestro7IT?',
-    answer:
-      'Связаться со школой Maestro7IT можно несколькими способами:\n\n' +
-      '• MAX — https://max.ru/u/f9LHodD0cOLxcVXpSMqTSZLCFG_q6uz0QRQKOhGSBc5RIx4h-KYqVRvzW3k\n' +
-      '• Telegram — @quadd4rv1n7 (https://t.me/quadd4rv1n7)\n' +
-      '• WhatsApp — +7 915 048-02-49 (https://wa.me/79150480249)\n' +
-      '• Email — info@maestro7it.ru\n' +
-      '• Телефон — +7 915 048-02-49\n' +
-      '• TapLink — https://taplink.cc/maestro7it\n' +
-      '• Сайт — https://school-maestro7it.ru',
-    keywords: 'контакты, телефон, email, telegram, whatsapp, max, связь',
-    category: 'Общее',
-    pinned: true,
-  },
-  {
-    question: 'Кто преподаватель?',
-    answer:
-      'Школу основал Дуплей Максим Игоревич — старший преподаватель информационных технологий, аналитик, философ, музыкант и DevOps-инженер. Автор 38 научных публикаций на Zenodo в области ИИ, образования, лингвистики и междисциплинарных исследований. ORCID: 0009-0007-7605-539X. Профиль научных работ: https://science-maestro-maestro7it.amvera.io',
-    keywords: 'преподаватель, автор, дуплей, максим, основатель, orcid',
-    category: 'Общее',
-  },
-  {
-    question: 'Какие направления курсов есть?',
-    answer:
-      'В коллекции Maestro7IT 23 курса по 7 направлениям:\n\n' +
-      '• DevOps — Linux, Docker, мониторинг\n' +
-      '• Безопасность — кибербезопасность, тестирование ПО\n' +
-      '• Базы данных — SQL, Redis, ClickHouse, MongoDB\n' +
-      '• Аналитика и AI — Power BI, нейросети и n8n\n' +
-      '• Программирование — JavaScript, PHP, Ассемблер, Go, C#, React\n' +
-      '• Мультимедиа — видеомонтаж, мастеринг звука, саунд-дизайн, Blender\n' +
-      '• Академическое — научные статьи, курсовые и дипломные',
-    keywords: 'направления, категории, список курсов, направления курсов',
-    category: 'Общее',
-  },
-  {
-    question: 'Подходят ли курсы начинающим?',
-    answer:
-      'Да, большинство курсов рассчитаны на начинающих. Например, «Docker для начинающих», «MongoDB для начинающих», «Программирование на JavaScript», «3D моделирование в Blender» доступны с нуля. Для курсов с глубокой специализацией (Ассемблер, ClickHouse, мониторинг) желательно базовое понимание программирования и Linux — это указано в описании курса.',
-    keywords: 'новичок, начинающий, с нуля, базовый,入门',
-    category: 'Общее',
-  },
-  {
-    question: 'Выдаёте ли вы сертификат?',
-    answer:
-      'После успешного прохождения курса на Stepik вы получаете электронный сертификат Stepik. Для индивидуальных занятий и наставничества выдаётся сертификат школы Maestro7IT. Сертификаты можно использовать в портфолио и при трудоустройстве.',
-    keywords: 'сертификат, документ, подтверждение, портфолио',
-    category: 'Общее',
-  },
-  {
-    question: 'Можно ли получить помощь с курсовой или дипломом?',
-    answer:
-      'Да, в Maestro7IT есть курс «Курсовые и дипломные работы» и направление академического письма — «Написание научных статей». Преподаватель поможет с выбором темы, структурой, оформлением по ГОСТ, антиплагиатом и подготовкой к защите. Запись — через любой мессенджер школы.',
-    keywords: 'курсовая, диплом, помощь, научная статья, гост, антиплагиат',
-    category: 'Общее',
-  },
-  {
-    question: 'Есть ли YouTube-канал?',
-    answer:
-      'Да, у школы есть канал на трёх видеоплатформах:\n\n' +
-      '• YouTube — https://www.youtube.com/channel/UCqA5pl9NkVDrirMDlNVmU7g\n' +
-      '• RuTube — https://rutube.ru/channel/4218729/\n' +
-      '• Plvideo — https://plvideo.ru/@it-coders\n\n' +
-      'Там публикуются бесплатные уроки, записи стримов и обзоры курсов.',
-    keywords: 'youtube, rutube, plvideo, видео, канал, уроки',
-    category: 'Общее',
-  },
-  {
-    question: 'Что такое MAX и зачем чат-бот в нём?',
-    answer:
-      'MAX — это российский мессенджер от VK. Школа Maestro7IT использует MAX как один из основных каналов связи со студентами. Чат-бот в MAX помогает быстро найти ответ по курсам, стоимости, записи — без ожидания оператора. Если ответа нет в базе, бот подключает нейросетевой fallback, чтобы всё равно помочь вам.',
-    keywords: 'max, мессенджер, бот, vk, зачем',
-    category: 'Общее',
-  },
-  {
-    question: 'Как начать обучение?',
-    answer:
-      'Просто напишите боту команду /start — он покажет главное меню. Дальше выбирайте интересующее направление: DevOps, Базы данных, Программирование и т.д. Бот подскажет, какой курс подходит под ваш уровень, и даст ссылку на Stepik. Для индивидуального плана обучения запишитесь на пробное занятие через сайт или мессенджеры.',
-    keywords: 'начать, обучение, как начать, старт, /start',
-    category: 'Общее',
-    pinned: true,
-  },
-]
+// ВАЖНО: выдуманные общие вопросы удалены.
+// В базе только реальные 23 курса из списка школы Maestro7IT.
+// Если у пользователя есть реальный частый вопрос — его добавит администратор
+// через админ-панель после анализа логов обращений.
 
 async function main() {
+  // SAFETY: this seed performs a full reset (deleteMany on every table).
+  // Refuse to wipe a database that already contains real traffic unless the
+  // operator explicitly opts in with `--force` or SEED_FORCE=1.
+  const force = process.argv.includes('--force') || process.env.SEED_FORCE === '1'
+  const existingUsers = await db.maxUser.count()
+  const existingMessages = await db.messageLog.count()
+  if (!force && (existingUsers > 0 || existingMessages > 0)) {
+    throw new Error(
+      `В базе уже есть данные (пользователей: ${existingUsers}, сообщений: ${existingMessages}).\n` +
+        'Seed выполняет ПОЛНЫЙ СБРОС и удалит их. Для чистого запуска используйте пустую БД,\n' +
+        'а если сброс действительно нужен — запустите: bun run scripts/seed.ts --force',
+    )
+  }
+
   console.log('🧹 Очистка старых данных...')
   await db.faqFeedback.deleteMany()
   await db.faqTag.deleteMany()
@@ -410,10 +313,38 @@ async function main() {
   await db.broadcastRecipient.deleteMany()
   await db.broadcast.deleteMany()
   await db.maxUser.deleteMany()
+  await db.passwordResetToken.deleteMany()
+  await db.adminSession.deleteMany()
+  await db.adminAccount.deleteMany()
 
-  // --- Категории ---
+  // --- Super-admin аккаунт ---
+  console.log('👤 Создание super-admin аккаунта...')
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@maestro7it.ru').trim().toLowerCase()
+  const adminPassword = process.env.ADMIN_PASSWORD
+  const adminName = process.env.ADMIN_NAME || 'Administrator'
+
+  if (!adminPassword) {
+    throw new Error(
+      'ADMIN_PASSWORD не задан в .env. Сгенерируйте: openssl rand -base64 24 | tr -d "/+=" | head -c 32',
+    )
+  }
+
+  const passwordHash = hashPassword(adminPassword)
+  const adminAccount = await db.adminAccount.create({
+    data: {
+      email: adminEmail,
+      passwordHash,
+      name: adminName,
+      role: 'super_admin',
+      isActive: true,
+    },
+  })
+  console.log(`   ✅ Создан аккаунт: ${adminEmail} (role: super_admin)`)
+  console.log(`   ⚠️  Пароль взят из .env — смените его после первого входа через админ-панель`)
+
+  // --- Категории (только реальные направления курсов) ---
   console.log('📂 Создание категорий...')
-  const categoryNames = Array.from(new Set(['Общее', ...COURSES.map((c) => c.category)]))
+  const categoryNames = Array.from(new Set(COURSES.map((c) => c.category)))
   const categoryMap = new Map<string, string>()
   for (let i = 0; i < categoryNames.length; i++) {
     const name = categoryNames[i]
@@ -428,44 +359,16 @@ async function main() {
     categoryMap.set(name, c.id)
   }
 
-  // --- Теги ---
+  // --- Теги (применимые к курсам) ---
   console.log('🏷️ Создание тегов...')
-  const tagNames = ['курс', 'запись', 'контакты', 'стоимость', 'начинающим', 'продвинутый', 'stepik']
+  const tagNames = ['курс', 'продвинутый', 'stepik']
   const tagMap = new Map<string, string>()
   for (const name of tagNames) {
     const t = await db.tag.create({ data: { name } })
     tagMap.set(name, t.id)
   }
 
-  // --- Общие вопросы ---
-  console.log(`📚 Создание ${GENERAL_FAQ.length} общих вопросов...`)
-  for (let i = 0; i < GENERAL_FAQ.length; i++) {
-    const f = GENERAL_FAQ[i]
-    const categoryName = f.category || 'Общее'
-    const faq = await db.faqItem.create({
-      data: {
-        question: f.question,
-        answer: f.answer,
-        keywords: f.keywords,
-        isPinned: f.pinned ?? false,
-        isPublished: true,
-        sortOrder: i,
-        categoryId: categoryMap.get(categoryName),
-      },
-    })
-    // Привязываем тег "контакты" для контактного вопроса и т.д.
-    if (/контакт|телефон|email|telegram/i.test(f.question)) {
-      await db.faqTag.create({ data: { faqItemId: faq.id, tagId: tagMap.get('контакты')! } })
-    }
-    if (/стоим|цен/i.test(f.question)) {
-      await db.faqTag.create({ data: { faqItemId: faq.id, tagId: tagMap.get('стоимость')! } })
-    }
-    if (/начинающ|с нуля|подходят/i.test(f.question)) {
-      await db.faqTag.create({ data: { faqItemId: faq.id, tagId: tagMap.get('начинающим')! } })
-    }
-  }
-
-  // --- Курсы ---
+  // --- Курсы (это единственный источник данных в базе) ---
   console.log(`🎓 Создание ${COURSES.length} курсов...`)
   for (let i = 0; i < COURSES.length; i++) {
     const c = COURSES[i]
@@ -484,7 +387,7 @@ async function main() {
     })
   }
 
-  // --- Команды бота ---
+  // --- Команды бота (только базовые, без выдуманного контента) ---
   console.log('⚙️ Создание команд бота...')
   await db.botCommand.createMany({
     data: [
@@ -493,8 +396,9 @@ async function main() {
         description: 'Запуск бота и приветствие',
         response:
           '👋 Привет! Я бот школы программирования Maestro7IT.\n\n' +
-          'Помогу подобрать курс, расскажу про стоимость и формат обучения, подскажу контакты.\n\n' +
-          'Команды:\n/menu — категории курсов\n/faq — частые вопросы\n/contacts — контакты школы\n/about — о школе\n/search <текст> — поиск по базе\n\n❓ Просто напишите свой вопрос — я постараюсь ответить.',
+          'Помогу подобрать курс из 23 доступных на платформе Stepik.\n\n' +
+          'Команды:\n/menu — категории курсов\n/search <текст> — поиск по базе\n\n' +
+          '❓ Просто напишите свой вопрос — я постараюсь ответить.',
         isEnabled: true,
       },
       {
@@ -502,42 +406,14 @@ async function main() {
         description: 'Список команд',
         response:
           '📖 Команды бота Maestro7IT:\n\n' +
-          '/start — приветствие\n/menu — категории курсов\n/faq — частые вопросы\n/contacts — контакты\n/about — о школе\n/search <текст> — поиск\n/show <id> — показать ответ по ID\n\nИли просто задайте вопрос словами — я найду ответ в базе или подключу нейросеть.',
+          '/start — приветствие\n/menu — категории курсов\n/search <текст> — поиск\n/show <id> — показать ответ по ID\n\n' +
+          'Или просто задайте вопрос словами — я найду ответ в базе или подключу нейросеть.',
         isEnabled: true,
       },
       {
         command: 'menu',
         description: 'Категории курсов',
         response: '📂 Выберите направление курса:',
-        isEnabled: true,
-      },
-      {
-        command: 'faq',
-        description: 'Частые вопросы',
-        response: '📋 Частые вопросы:\n\n• Как записаться на пробное занятие?\n• Сколько стоят курсы?\n• Где проходят курсы?\n• Какие контакты?\n• Подходят ли курсы начинающим?\n\nЗадайте вопрос словами — отвечу подробно.',
-        isEnabled: true,
-      },
-      {
-        command: 'contacts',
-        description: 'Контакты школы',
-        response:
-          '📞 Контакты Maestro7IT:\n\n' +
-          '• MAX — https://max.ru/u/f9LHodD0cOLxcVXpSMqTSZLCFG_q6uz0QRQKOhGSBc5RIx4h-KYqVRvzW3k\n' +
-          '• Telegram — @quadd4rv1n7\n' +
-          '• WhatsApp — +7 915 048-02-49\n' +
-          '• Email — info@maestro7it.ru\n' +
-          '• Сайт — https://school-maestro7it.ru',
-        isEnabled: true,
-      },
-      {
-        command: 'about',
-        description: 'О школе',
-        response:
-          '🏫 О школе Maestro7IT:\n\n' +
-          'Школа программирования Maestro7IT — обучение разработке, ИИ и инженерным практикам.\n\n' +
-          'Основатель — Дуплей Максим Игоревич, старший преподаватель ИТ, DevOps-инженер, автор 38 научных публикаций.\n\n' +
-          'В коллекции 23 курса по 7 направлениям: DevOps, Безопасность, Базы данных, Аналитика и AI, Программирование, Мультимедиа, Академическое.\n\n' +
-          'Сайт: https://school-maestro7it.ru',
         isEnabled: true,
       },
     ],
@@ -548,8 +424,8 @@ async function main() {
   await db.botSetting.createMany({
     data: [
       { key: 'welcomeText', value: '👋 Я бот школы программирования Maestro7IT. Чем могу помочь?' },
-      { key: 'noAnswerText', value: '🤔 К сожалению, у меня нет точного ответа на этот вопрос. Попробуйте переформулировать или напишите в поддержку: Telegram @quadd4rv1n7, WhatsApp +7 915 048-02-49.' },
-      { key: 'offtopicText', value: '⚠️ Я отвечаю только на вопросы о курсах и обучении в Maestro7IT. По другим темам лучше написать в Telegram @quadd4rv1n7.' },
+      { key: 'noAnswerText', value: '🤔 К сожалению, у меня нет точного ответа на этот вопрос. Попробуйте переформулировать или используйте /menu для просмотра курсов.' },
+      { key: 'offtopicText', value: '⚠️ Я отвечаю только на вопросы о курсах и обучении в Maestro7IT.' },
       { key: 'useLlmFallback', value: 'true' },
       { key: 'botName', value: 'Maestro7IT Bot' },
       { key: 'webhookSubscribed', value: 'false' },
@@ -558,6 +434,7 @@ async function main() {
 
   // --- Итоги ---
   const counts = {
+    adminAccounts: await db.adminAccount.count(),
     categories: await db.category.count(),
     faq: await db.faqItem.count(),
     tags: await db.tag.count(),
@@ -576,7 +453,6 @@ function emojiForCategory(name: string): string {
     case 'Программирование': return '💻'
     case 'Мультимедиа': return '🎬'
     case 'Академическое': return '🎓'
-    case 'Общее': return '📚'
     default: return '📁'
   }
 }

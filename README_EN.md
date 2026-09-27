@@ -38,6 +38,7 @@ User (MAX) → webhook → bot-logic → FAQ search → answer
 ## ✨ Features
 
 ### For the user in MAX
+
 - 🔍 Keyword search with relevance ranking
 - 📂 Category navigation via inline buttons (7 course directions)
 - 📃 Pinned questions — important items always on top
@@ -46,6 +47,7 @@ User (MAX) → webhook → bot-logic → FAQ search → answer
 - 💬 Commands: `/start`, `/help`, `/menu`, `/faq`, `/contacts`, `/about`, `/search`, `/show`
 
 ### For the administrator
+
 - 📊 Dashboard — key metrics for the last 24 hours
 - 📈 Analytics — answer funnel, FAQ/LLM share, off-topic, charts (Recharts)
 - 🗂️ Knowledge base (FAQ) — CRUD for categories and answers, tags, pinning, publishing
@@ -73,9 +75,10 @@ User (MAX) → webhook → bot-logic → FAQ search → answer
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
 ### Requirements
+
 - **Bun** 1.0+ (recommended) or **Node.js** 18+
 - 256 MB RAM (dev) / 512 MB (prod)
 
@@ -193,6 +196,7 @@ Open **http://localhost:3000** — the admin panel. Default password `admin123` 
 - ⚠️ **Vercel/Netlify are not suitable** — SQLite does not work in a serverless environment.
 
 **Verify after deployment:**
+
 ```bash
 curl https://your-domain.com/api/health
 ```
@@ -214,6 +218,8 @@ curl https://your-domain.com/api/health
 
 ## 📝 License
 
-© 2026 Maestro7IT · Dupley Maxim Igorevich. Modeled after [service-learning-max-chatbot](https://github.com/QuadDarv1ne/service-learning-max-chatbot) (QuadDarv1ne).
+© 2026 Maestro7IT · Dupley Maxim Igorevich.
+
+Modeled after [service-learning-max-chatbot](https://github.com/QuadDarv1ne/service-learning-max-chatbot) (QuadDarv1ne).
 
 See the [LICENSE](LICENSE) file (English) and [LICENSE_RU](LICENSE_RU) (Russian) for the full terms.

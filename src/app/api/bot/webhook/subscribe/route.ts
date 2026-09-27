@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       update: { value: 'true' },
       create: { key: 'webhookSubscribed', value: 'true' },
     })
-    await logAdminAction('bot.webhook.subscribe', 'BotSetting', null, `URL: ${url}`)
+    await logAdminAction('bot.webhook.subscribe', 'BotSetting', undefined, `URL: ${url}`)
     return NextResponse.json({ ok: true, result })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 })

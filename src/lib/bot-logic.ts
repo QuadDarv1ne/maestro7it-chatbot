@@ -325,7 +325,7 @@ export async function handleCallback(
         })
         // обновляем только последний исходящий лог с этим faqItemId
         const lastLog = await db.messageLog.findFirst({
-          where: { faqItemId, maxUserId: user.id, direction: 'out' },
+          where: { faqItemId: faqId, maxUserId: user.id, direction: 'out' },
           orderBy: { createdAt: 'desc' },
         })
         if (lastLog) {
@@ -341,7 +341,7 @@ export async function handleCallback(
         text:
           rating === 1
             ? '💚 Спасибо за оценку!'
-            : '🙏 Спасибо, постараемся улучшить ответ. Если у вас есть момент — напишите в Telegram @quadd4rv1n7, что именно не подошло.',
+            : '🙏 Спасибо, постараемся улучшить ответ.',
         source: 'callback',
         isOffTopic: false,
       }
@@ -410,18 +410,18 @@ export async function handleCallback(
     }
   }
 
-  // contacts
-  if (payload === 'contacts') {
+  // menu — показать категории курсов (как при команде /menu)
+  if (payload === 'menu') {
+    const categories = await db.category.findMany({
+      orderBy: { sortOrder: 'asc' },
+    })
     return {
-      text:
-        '📞 Контакты Maestro7IT:\n\n' +
-        '• MAX — https://max.ru/u/f9LHodD0cOLxcVXpSMqTSZLCFG_q6uz0QRQKOhGSBc5RIx4h-KYqVRvzW3k\n' +
-        '• Telegram — @quadd4rv1n7\n' +
-        '• WhatsApp — +7 915 048-02-49\n' +
-        '• Email — info@maestro7it.ru\n' +
-        '• Сайт — https://school-maestro7it.ru',
+      text: '📂 Выберите направление курса:',
       source: 'callback',
       isOffTopic: false,
+      inlineKeyboard: categories.map((c) => [
+        { text: `${c.emoji || '📁'} ${c.name}`, payload: `category:${c.slug}` },
+      ]),
     }
   }
 

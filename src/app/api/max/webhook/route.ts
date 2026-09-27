@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { handleMessage, handleCallback } from '@/lib/bot-logic'
 import { sendText, answerCallback, getBotToken } from '@/lib/max-api'
 import { db } from '@/lib/db'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 /**
  * MAX webhook endpoint.
@@ -11,6 +12,10 @@ import { db } from '@/lib/db'
  *  - callback.query   — нажата inline-кнопка
  *
  * Документация: https://dev.max.ru/docs
+ *
+ * Безопасность:
+ *  - Webhook signature verification через HMAC-SHA256 (если задан WEBHOOK_SECRET)
+ *  - Idempotency через in-memory LRU-кэш (защита от дублей)
  *
  * Idempotency: MAX может присылать одно и то же событие несколько раз.
  * Используем in-memory LRU-кэш на 60 секунд для deduplication по message.id.
@@ -41,10 +46,43 @@ setInterval(() => {
   }
 }, 60_000).unref?.()
 
+/**
+ * Проверка подписи webhook (если задан WEBHOOK_SECRET).
+ * MAX подписывает body HMAC-SHA256 с секретом, отправляет в заголовке X-Max-Signature.
+ *
+ * Если WEBHOOK_SECRET не задан — проверка пропускается (для dev).
+ */
+function verifyWebhookSignature(req: NextRequest, rawBody: string): boolean {
+  const secret = process.env.WEBHOOK_SECRET
+  if (!secret) return true // проверка отключена
+
+  const signature = req.headers.get('x-max-signature') || req.headers.get('x-signature')
+  if (!signature) return false
+
+  try {
+    const expected = createHmac('sha256', secret).update(rawBody).digest('hex')
+    const sigBuf = Buffer.from(signature)
+    const expBuf = Buffer.from(expected)
+    if (sigBuf.length !== expBuf.length) return false
+    return timingSafeEqual(sigBuf, expBuf)
+  } catch {
+    return false
+  }
+}
+
 export async function POST(req: NextRequest) {
+  // Читаем raw body для проверки подписи
+  const rawBody = await req.text()
+
+  // Проверка подписи (если включена)
+  if (!verifyWebhookSignature(req, rawBody)) {
+    console.warn('[webhook] signature verification failed')
+    return NextResponse.json({ error: 'invalid_signature' }, { status: 401 })
+  }
+
   let body: any
   try {
-    body = await req.json()
+    body = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 })
   }

@@ -6,6 +6,10 @@ import { requireAdmin, badRequest } from '@/lib/api-helpers'
  * Симулятор бота — позволяет администратору протестировать логику
  * без реального подключения к MAX.
  *
+ * Использует СТАБИЛЬНЫЙ sim_admin ID, чтобы не плодить пользователей в БД.
+ * Все запросы логируются в общий MessageLog с этим же пользователем,
+ * что позволяет увидеть их в "Логах обращений" и "Запросах без ответа".
+ *
  * POST /api/bot/simulate
  *   { "text": "Какие курсы по Python?" }
  *   → { ok, reply: { text, source, faqItemId, isOffTopic, inlineKeyboard } }
@@ -13,6 +17,12 @@ import { requireAdmin, badRequest } from '@/lib/api-helpers'
  *   { "payload": "category:devops" }
  *   → { ok, reply: {...} }  (callback simulation)
  */
+
+// Стабильный ID симулятора — не плодим пользователей в БД
+const SIM_MAX_USER_ID = 'sim_admin_local'
+const SIM_USERNAME = 'simulator'
+const SIM_FIRST_NAME = 'Симулятор'
+
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin()
   if (!guard.ok) return guard.response
@@ -20,26 +30,28 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
 
   try {
+    // --- Симуляция callback (inline button click) ---
     if (body.payload) {
-      // Симуляция callback
-      const reply = await handleCallback(String(body.payload), {
-        maxUserId: `sim_${Date.now()}`,
-        username: 'simulator',
-        firstName: 'Симулятор',
-        text: `[callback:${body.payload}]`,
+      const payload = String(body.payload)
+      const reply = await handleCallback(payload, {
+        maxUserId: SIM_MAX_USER_ID,
+        username: SIM_USERNAME,
+        firstName: SIM_FIRST_NAME,
+        text: `[callback:${payload}]`,
       })
       return NextResponse.json({ ok: true, reply })
     }
 
+    // --- Симуляция текстового сообщения ---
     const text = (body.text || '').toString().trim()
     if (!text) return badRequest('Введите текст сообщения')
 
     if (text.length > 2000) return badRequest('Сообщение слишком длинное (макс. 2000)')
 
     const reply = await handleMessage({
-      maxUserId: `sim_${Date.now()}`,
-      username: 'simulator',
-      firstName: 'Симулятор',
+      maxUserId: SIM_MAX_USER_ID,
+      username: SIM_USERNAME,
+      firstName: SIM_FIRST_NAME,
       text,
     })
 

@@ -85,7 +85,7 @@ export async function PUT(req: NextRequest) {
     await logAdminAction(
       'settings.update',
       'BotSetting',
-      null,
+      undefined,
       `Обновлены: ${updated.join(', ')}${skipped.length ? ` (пропущены: ${skipped.join(', ')})` : ''}`,
     )
   }

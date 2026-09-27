@@ -1,0 +1,450 @@
+/**
+ * Core bot logic тАФ ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╨░ ╨▓╤Е╨╛╨┤╤П╤Й╨╕╤Е ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ ╨╕╨╖ MAX.
+ *
+ * ╨и╨░╨│╨╕:
+ *  1. ╨Ш╨┤╨╡╨╜╤В╨╕╤Д╨╕╤Ж╨╕╤А╤Г╨╡╨╝/╤Б╨╛╨╖╨┤╨░╤С╨╝ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П MaxUser
+ *  2. ╨Я╨░╤А╤Б╨╕╨╝ ╨║╨╛╨╝╨░╨╜╨┤╤Г ╨╕╨╗╨╕ ╤В╨╡╨║╤Б╤В
+ *  3. ╨Ш╤Й╨╡╨╝ ╨╛╤В╨▓╨╡╤В ╨▓ FAQ (╤З╨╡╤А╨╡╨╖ lib/search)
+ *  4. ╨Х╤Б╨╗╨╕ ╨╜╨╡╤В тАФ ╨┐╤А╨╛╨▒╤Г╨╡╨╝ LLM fallback (╨╡╤Б╨╗╨╕ ╨▓╨║╨╗╤О╤З╤С╨╜)
+ *  5. ╨Ы╨╛╨│╨╕╤А╤Г╨╡╨╝ ╨▓╤Б╤С ╨▓ MessageLog
+ *  6. ╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╨╝ ╤В╨╡╨║╤Б╤В ╨╛╤В╨▓╨╡╤В╨░ ╨╕ inline-╨║╨╗╨░╨▓╨╕╨░╤В╤Г╤А╤Г
+ */
+
+import { db } from './db'
+import { searchFaq, type SearchResult } from './search'
+import { generateLlmResponse } from './llm'
+
+export interface IncomingMessage {
+  maxUserId: string
+  username?: string
+  firstName?: string
+  lastName?: string
+  text: string
+}
+
+export interface OutgoingReply {
+  text: string
+  source: 'faq' | 'llm' | 'command' | 'offtopic' | 'unknown' | 'callback'
+  faqItemId?: string
+  isOffTopic: boolean
+  inlineKeyboard?: { text: string; payload: string }[][]
+}
+
+// --- Helpers ---
+
+async function upsertUser(msg: IncomingMessage) {
+  const existing = await db.maxUser.findUnique({ where: { maxUserId: msg.maxUserId } })
+  if (existing) {
+    return db.maxUser.update({
+      where: { id: existing.id },
+      data: {
+        username: msg.username || existing.username,
+        firstName: msg.firstName || existing.firstName,
+        lastName: msg.lastName || existing.lastName,
+        lastSeenAt: new Date(),
+      },
+    })
+  }
+  return db.maxUser.create({
+    data: {
+      maxUserId: msg.maxUserId,
+      username: msg.username,
+      firstName: msg.firstName,
+      lastName: msg.lastName,
+    },
+  })
+}
+
+async function logMessage(params: {
+  maxUserId?: string
+  direction: 'in' | 'out'
+  text: string
+  source: string
+  faqItemId?: string
+  isOffTopic?: boolean
+  rating?: number | null
+}) {
+  return db.messageLog.create({
+    data: {
+      maxUserId: params.maxUserId,
+      direction: params.direction,
+      text: params.text.slice(0, 4000),
+      source: params.source,
+      faqItemId: params.faqItemId,
+      isOffTopic: params.isOffTopic ?? false,
+      rating: params.rating ?? null,
+    },
+  })
+}
+
+async function getSetting(key: string, fallback = ''): Promise<string> {
+  const row = await db.botSetting.findUnique({ where: { key } })
+  return row?.value ?? fallback
+}
+
+async function getBoolSetting(key: string, fallback: boolean): Promise<boolean> {
+  const v = await getSetting(key, '')
+  if (v === 'true') return true
+  if (v === 'false') return false
+  return fallback
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1) + 'тАж' : s
+}
+
+// --- Main entry ---
+
+export async function handleMessage(msg: IncomingMessage): Promise<OutgoingReply> {
+  const user = await upsertUser(msg)
+  await logMessage({ maxUserId: user.id, direction: 'in', text: msg.text, source: 'user' })
+
+  const text = msg.text.trim()
+  if (!text) {
+    const welcomeText = await getSetting('welcomeText', 'ЁЯСЛ ╨з╨╡╨╝ ╨╝╨╛╨│╤Г ╨┐╨╛╨╝╨╛╤З╤М?')
+    return {
+      text: welcomeText,
+      source: 'command',
+      isOffTopic: false,
+    }
+  }
+
+  const lower = text.toLowerCase()
+
+  // 1. ╨Ъ╨╛╨╝╨░╨╜╨┤╤Л
+  if (lower.startsWith('/')) {
+    const cmdMatch = lower.match(/^\/(\S+)/)
+    if (cmdMatch) {
+      const cmd = cmdMatch[1]
+      const arg = text.slice(cmdMatch[0].length).trim()
+      const reply = await handleCommand(cmd, arg, user.id)
+      if (reply) {
+        await logMessage({
+          maxUserId: user.id,
+          direction: 'out',
+          text: reply.text,
+          source: reply.source === 'faq' ? 'faq' : 'command',
+          faqItemId: reply.faqItemId,
+          isOffTopic: reply.isOffTopic,
+        })
+        return reply
+      }
+    }
+  }
+
+  // 2. ╨Я╨╛╨╕╤Б╨║ ╨┐╨╛ FAQ
+  const results = await searchFaq(text, 3)
+  if (results.length > 0) {
+    const top = results[0]
+    const reply: OutgoingReply = {
+      text: formatFaqAnswer(top),
+      source: 'faq',
+      faqItemId: top.faqItemId,
+      isOffTopic: false,
+      inlineKeyboard: [
+        [
+          { text: 'ЁЯСН ╨Я╨╛╨╗╨╡╨╖╨╜╨╛', payload: `feedback:${top.faqItemId}:1` },
+          { text: 'ЁЯСО ╨Э╨╡ ╨┐╨╛╨╝╨╛╨│╨╗╨╛', payload: `feedback:${top.faqItemId}:-1` },
+        ],
+        ...(results.length > 1
+          ? [[{ text: 'ЁЯУЛ ╨Х╤Й╤С ╨▓╨░╤А╨╕╨░╨╜╤В╤Л', payload: `more:${truncate(text, 100)}` }]]
+          : []),
+      ],
+    }
+    await logMessage({
+      maxUserId: user.id,
+      direction: 'out',
+      text: reply.text,
+      source: 'faq',
+      faqItemId: top.faqItemId,
+    })
+    return reply
+  }
+
+  // 3. LLM fallback (╨╡╤Б╨╗╨╕ ╨▓╨║╨╗╤О╤З╤С╨╜)
+  const useLlm = await getBoolSetting('useLlmFallback', true)
+  if (useLlm) {
+    const llmResult = await generateLlmResponse(text)
+    const reply: OutgoingReply = {
+      text: llmResult.text,
+      source: llmResult.isOnTopic ? 'llm' : 'offtopic',
+      isOffTopic: !llmResult.isOnTopic,
+    }
+    await logMessage({
+      maxUserId: user.id,
+      direction: 'out',
+      text: reply.text,
+      source: reply.source,
+      isOffTopic: reply.isOffTopic,
+    })
+    return reply
+  }
+
+  // 4. ╨Э╨╡╤В ╨╛╤В╨▓╨╡╤В╨░
+  const noAnswerText = await getSetting(
+    'noAnswerText',
+    'ЁЯдФ ╨Ш╨╖╨▓╨╕╨╜╨╕╤В╨╡, ╤Г ╨╝╨╡╨╜╤П ╨╜╨╡╤В ╨╛╤В╨▓╨╡╤В╨░ ╨╜╨░ ╤Н╤В╨╛╤В ╨▓╨╛╨┐╤А╨╛╤Б.',
+  )
+  const reply: OutgoingReply = {
+    text: noAnswerText,
+    source: 'unknown',
+    isOffTopic: false,
+    inlineKeyboard: [[{ text: 'ЁЯУЮ ╨Э╨░╨┐╨╕╤Б╨░╤В╤М ╨▓ ╨┐╨╛╨┤╨┤╨╡╤А╨╢╨║╤Г', payload: 'contacts' }]],
+  }
+  await logMessage({
+    maxUserId: user.id,
+    direction: 'out',
+    text: reply.text,
+    source: 'unknown',
+  })
+  return reply
+}
+
+function formatFaqAnswer(r: SearchResult): string {
+  return `${r.answer}\n\nтЭУ ╨С╤Л╨╗ ╨╗╨╕ ╨╛╤В╨▓╨╡╤В ╨┐╨╛╨╗╨╡╨╖╨╡╨╜? ╨Э╨░╨╢╨╝╨╕╤В╨╡ ╨║╨╜╨╛╨┐╨║╤Г ╨╜╨╕╨╢╨╡.`
+}
+
+async function handleCommand(
+  cmd: string,
+  arg: string,
+  _userId: string,
+): Promise<OutgoingReply | null> {
+  const command = await db.botCommand.findUnique({ where: { command: cmd } })
+  if (!command || !command.isEnabled) return null
+
+  // /menu тАФ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╨╕ ╨║╤Г╤А╤Б╨╛╨▓
+  if (cmd === 'menu') {
+    const categories = await db.category.findMany({
+      where: { NOT: { slug: 'obshee' } },
+      orderBy: { sortOrder: 'asc' },
+    })
+    return {
+      text: command.response,
+      source: 'command',
+      isOffTopic: false,
+      inlineKeyboard: categories.map((c) => [
+        { text: `${c.emoji || 'ЁЯУБ'} ${c.name}`, payload: `category:${c.slug}` },
+      ]),
+    }
+  }
+
+  // /search ╨▒╨╡╨╖ ╨░╤А╨│╤Г╨╝╨╡╨╜╤В╨░ тАФ ╨┐╨╛╨┤╤Б╨║╨░╨╖╨║╨░
+  if (cmd === 'search' && !arg) {
+    return {
+      text:
+        'ЁЯФН ╨Я╨╛╨╕╤Б╨║ ╨┐╨╛ ╨▒╨░╨╖╨╡ ╨╖╨╜╨░╨╜╨╕╨╣.\n\n╨Ш╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╨╡: /search <╨╖╨░╨┐╤А╨╛╤Б>\n╨Э╨░╨┐╤А╨╕╨╝╨╡╤А: /search docker',
+      source: 'command',
+      isOffTopic: false,
+    }
+  }
+
+  if (cmd === 'search' && arg) {
+    const results = await searchFaq(arg, 5)
+    if (results.length === 0) {
+      return {
+        text: `ЁЯФН ╨Я╨╛ ╨╖╨░╨┐╤А╨╛╤Б╤Г ┬л${arg}┬╗ ╨╜╨╕╤З╨╡╨│╨╛ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨╛. ╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣╤В╨╡ ╨┐╨╡╤А╨╡╤Д╨╛╤А╨╝╤Г╨╗╨╕╤А╨╛╨▓╨░╤В╤М ╨╕╨╗╨╕ ╨╖╨░╨┤╨░╨╣╤В╨╡ ╨▓╨╛╨┐╤А╨╛╤Б ╤Б╨╗╨╛╨▓╨░╨╝╨╕.`,
+        source: 'command',
+        isOffTopic: false,
+      }
+    }
+    return {
+      text: `ЁЯФН ╨а╨╡╨╖╤Г╨╗╤М╤В╨░╤В╤Л ╨┐╨╛ ┬л${arg}┬╗:\n\n${results
+        .map((r, i) => `${i + 1}. ${r.question}`)
+        .join('\n')}\n\n╨Т╤Л╨▒╨╡╤А╨╕╤В╨╡ ╨▓╨╛╨┐╤А╨╛╤Б:`,
+      source: 'command',
+      isOffTopic: false,
+      inlineKeyboard: results.map((r) => [
+        { text: truncate(r.question, 60), payload: `show:${r.faqItemId}` },
+      ]),
+    }
+  }
+
+  if (cmd === 'show' && arg) {
+    const faq = await db.faqItem.findUnique({ where: { id: arg } })
+    if (!faq) {
+      return {
+        text: `тЭМ ╨Ю╤В╨▓╨╡╤В ╤Б ID ${arg} ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜.`,
+        source: 'command',
+        isOffTopic: false,
+      }
+    }
+    return {
+      text: formatFaqAnswer({
+        faqItemId: faq.id,
+        question: faq.question,
+        answer: faq.answer,
+        score: 0,
+      }),
+      source: 'faq',
+      faqItemId: faq.id,
+      isOffTopic: false,
+      inlineKeyboard: [
+        [
+          { text: 'ЁЯСН ╨Я╨╛╨╗╨╡╨╖╨╜╨╛', payload: `feedback:${faq.id}:1` },
+          { text: 'ЁЯСО ╨Э╨╡ ╨┐╨╛╨╝╨╛╨│╨╗╨╛', payload: `feedback:${faq.id}:-1` },
+        ],
+      ],
+    }
+  }
+
+  // Default: ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╨╝ response ╨║╨╛╨╝╨░╨╜╨┤╤Л
+  return {
+    text: command.response,
+    source: 'command',
+    isOffTopic: false,
+  }
+}
+
+// --- Callbacks (inline button clicks) ---
+
+/**
+ * ╨Я╨░╤А╤Б╨╕╤В payload ╤Д╨╛╤А╨╝╨░╤В╨░ "key:value1:value2" ╤Б ╨╖╨░╤Й╨╕╤В╨╛╨╣ ╨╛╤В ╨┤╨▓╨╛╨╡╤В╨╛╤З╨╕╨╣ ╨▓ ╨╖╨╜╨░╤З╨╡╨╜╨╕╤П╤Е.
+ * ╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В [key, rest].
+ */
+function parsePayload(payload: string): { key: string; rest: string } {
+  const idx = payload.indexOf(':')
+  if (idx === -1) return { key: payload, rest: '' }
+  return { key: payload.slice(0, idx), rest: payload.slice(idx + 1) }
+}
+
+export async function handleCallback(
+  payload: string,
+  msg: IncomingMessage,
+): Promise<OutgoingReply> {
+  const user = await upsertUser(msg)
+  const { key, rest } = parsePayload(payload)
+
+  // feedback:<faqId>:<1|-1>
+  if (key === 'feedback') {
+    const [faqId, ratingStr] = rest.split(':')
+    const rating = Number(ratingStr)
+    if (faqId && (rating === 1 || rating === -1)) {
+      try {
+        await db.faqFeedback.create({
+          data: { faqItemId: faqId, maxUserId: user.id, rating },
+        })
+        // ╨╛╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╤В╨╛╨╗╤М╨║╨╛ ╨┐╨╛╤Б╨╗╨╡╨┤╨╜╨╕╨╣ ╨╕╤Б╤Е╨╛╨┤╤П╤Й╨╕╨╣ ╨╗╨╛╨│ ╤Б ╤Н╤В╨╕╨╝ faqItemId
+        const lastLog = await db.messageLog.findFirst({
+          where: { faqItemId, maxUserId: user.id, direction: 'out' },
+          orderBy: { createdAt: 'desc' },
+        })
+        if (lastLog) {
+          await db.messageLog.update({
+            where: { id: lastLog.id },
+            data: { rating },
+          })
+        }
+      } catch (e) {
+        // ignore duplicate feedback
+      }
+      return {
+        text:
+          rating === 1
+            ? 'ЁЯТЪ ╨б╨┐╨░╤Б╨╕╨▒╨╛ ╨╖╨░ ╨╛╤Ж╨╡╨╜╨║╤Г!'
+            : 'ЁЯЩП ╨б╨┐╨░╤Б╨╕╨▒╨╛, ╨┐╨╛╤Б╤В╨░╤А╨░╨╡╨╝╤Б╤П ╤Г╨╗╤Г╤З╤И╨╕╤В╤М ╨╛╤В╨▓╨╡╤В. ╨Х╤Б╨╗╨╕ ╤Г ╨▓╨░╤Б ╨╡╤Б╤В╤М ╨╝╨╛╨╝╨╡╨╜╤В тАФ ╨╜╨░╨┐╨╕╤И╨╕╤В╨╡ ╨▓ Telegram @quadd4rv1n7, ╤З╤В╨╛ ╨╕╨╝╨╡╨╜╨╜╨╛ ╨╜╨╡ ╨┐╨╛╨┤╨╛╤И╨╗╨╛.',
+        source: 'callback',
+        isOffTopic: false,
+      }
+    }
+  }
+
+  // category:<slug>
+  if (key === 'category') {
+    const slug = rest
+    const category = await db.category.findUnique({ where: { slug } })
+    if (!category) {
+      return { text: '╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░', source: 'callback', isOffTopic: false }
+    }
+    const faqs = await db.faqItem.findMany({
+      where: { categoryId: category.id, isPublished: true },
+      orderBy: [{ isPinned: 'desc' }, { sortOrder: 'asc' }],
+      take: 20,
+    })
+    if (faqs.length === 0) {
+      return {
+        text: `${category.emoji || ''} ${category.name}\n\n╨Т ╤Н╤В╨╛╨╣ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╨╕ ╨┐╨╛╨║╨░ ╨╜╨╡╤В ╨▓╨╛╨┐╤А╨╛╤Б╨╛╨▓.`,
+        source: 'callback',
+        isOffTopic: false,
+      }
+    }
+    return {
+      text: `${category.emoji || ''} ${category.name} тАФ ╨▓╤Л╨▒╨╡╤А╨╕╤В╨╡ ╨▓╨╛╨┐╤А╨╛╤Б:`,
+      source: 'callback',
+      isOffTopic: false,
+      inlineKeyboard: faqs.map((f) => [
+        { text: truncate(f.question, 60), payload: `show:${f.id}` },
+      ]),
+    }
+  }
+
+  // show:<faqId>
+  if (key === 'show') {
+    const faqId = rest
+    const faq = await db.faqItem.findUnique({ where: { id: faqId } })
+    if (!faq) {
+      return { text: 'тЭМ ╨Ю╤В╨▓╨╡╤В ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜', source: 'callback', isOffTopic: false }
+    }
+    await logMessage({
+      maxUserId: user.id,
+      direction: 'out',
+      text: faq.answer,
+      source: 'faq',
+      faqItemId: faq.id,
+    })
+    return {
+      text: formatFaqAnswer({
+        faqItemId: faq.id,
+        question: faq.question,
+        answer: faq.answer,
+        score: 0,
+      }),
+      source: 'faq',
+      faqItemId: faq.id,
+      isOffTopic: false,
+      inlineKeyboard: [
+        [
+          { text: 'ЁЯСН ╨Я╨╛╨╗╨╡╨╖╨╜╨╛', payload: `feedback:${faq.id}:1` },
+          { text: 'ЁЯСО ╨Э╨╡ ╨┐╨╛╨╝╨╛╨│╨╗╨╛', payload: `feedback:${faq.id}:-1` },
+        ],
+      ],
+    }
+  }
+
+  // contacts
+  if (payload === 'contacts') {
+    return {
+      text:
+        'ЁЯУЮ ╨Ъ╨╛╨╜╤В╨░╨║╤В╤Л Maestro7IT:\n\n' +
+        'тАв MAX тАФ https://max.ru/u/f9LHodD0cOLxcVXpSMqTSZLCFG_q6uz0QRQKOhGSBc5RIx4h-KYqVRvzW3k\n' +
+        'тАв Telegram тАФ @quadd4rv1n7\n' +
+        'тАв WhatsApp тАФ +7 915 048-02-49\n' +
+        'тАв Email тАФ info@maestro7it.ru\n' +
+        'тАв ╨б╨░╨╣╤В тАФ https://school-maestro7it.ru',
+      source: 'callback',
+      isOffTopic: false,
+    }
+  }
+
+  // more:<text> тАФ ╨┐╨╛╨║╨░╨╖╨░╤В╤М ╨▒╨╛╨╗╤М╤И╨╡ ╨▓╨░╤А╨╕╨░╨╜╤В╨╛╨▓
+  if (key === 'more') {
+    const query = rest
+    const results = await searchFaq(query, 8)
+    if (results.length === 0) {
+      return {
+        text: 'ЁЯФН ╨С╨╛╨╗╤М╤И╨╡ ╨╜╨╕╤З╨╡╨│╨╛ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨╛. ╨Э╨░╨┐╨╕╤И╨╕╤В╨╡ ╤Б╨▓╨╛╨╣ ╨▓╨╛╨┐╤А╨╛╤Б ╤Б╨╗╨╛╨▓╨░╨╝╨╕ ╨╕╨╗╨╕ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣╤В╨╡ /search.',
+        source: 'callback',
+        isOffTopic: false,
+      }
+    }
+    return {
+      text: `ЁЯФН ╨Х╤Й╤С ╨▓╨░╤А╨╕╨░╨╜╤В╤Л ╨┐╨╛ ┬л${query}┬╗:`,
+      source: 'callback',
+      isOffTopic: false,
+      inlineKeyboard: results.map((r) => [
+        { text: truncate(r.question, 60), payload: `show:${r.faqItemId}` },
+      ]),
+    }
+  }
+
+  return { text: '╨Э╨╡╨╕╨╖╨▓╨╡╤Б╤В╨╜╨░╤П ╨║╨╛╨╝╨░╨╜╨┤╨░', source: 'callback', isOffTopic: false }
+}
